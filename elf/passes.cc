@@ -557,6 +557,9 @@ void add_synthetic_symbols(Context<E> &ctx) {
   if constexpr (is_ppc<E>)
     ctx.TOC = add(".TOC.");
 
+  if constexpr (std::is_same_v<E, PPC32>)
+    ctx._SDA_BASE_ = add("_SDA_BASE_");
+
   for (Chunk<E> *chunk : ctx.chunks) {
     if (std::optional<std::string> name = get_start_stop_name(ctx, *chunk)) {
       add(save_string(ctx, "__start_" + *name));

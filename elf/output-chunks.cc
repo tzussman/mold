@@ -844,7 +844,10 @@ static std::vector<Word<E>> create_dynamic_section(Context<E> &ctx) {
   if (flags1)
     define(DT_FLAGS_1, flags1);
 
-  if constexpr (is_ppc<E>) {
+  if constexpr (std::is_same_v<E, PPC32>)
+    define(DT_PPC_GOT, ctx.got->shdr.sh_addr);
+
+  if constexpr (is_ppc64<E>) {
     // PPC64_GLINK is defined by the psABI to refer 32 bytes before
     // the first PLT entry. I don't know why it's 32 bytes off, but
     // it's what it is.
@@ -1339,8 +1342,9 @@ void GotSection<E>::copy_buf(Context<E> &ctx) {
   Word<E> *buf = (Word<E> *)(ctx.buf + this->shdr.sh_offset);
   memset(buf, 0, this->shdr.sh_size);
 
-  // s390x psABI requires GOT[0] to be set to the link-time value of _DYNAMIC.
-  if constexpr (std::is_same_v<E, S390X>)
+  // ppc32 and s390x psABIs require GOT[0] to be set to the link-time
+  // value of _DYNAMIC.
+  if constexpr (std::is_same_v<E, PPC32> || std::is_same_v<E, S390X>)
     if (ctx.dynamic)
       buf[0] = ctx.dynamic->shdr.sh_addr;
 

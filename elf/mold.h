@@ -530,10 +530,15 @@ public:
     this->shdr.sh_flags = SHF_ALLOC | SHF_WRITE;
     this->shdr.sh_addralign = sizeof(Word<E>);
 
-    // We always create a .got so that _GLOBAL_OFFSET_TABLE_ has
-    // something to point to. s390x psABI defines GOT[1] as a
-    // reserved slot, so we allocate one more on s390x.
-    this->shdr.sh_size = (is_s390x<E> ? 2 : 1) * sizeof(Word<E>);
+    // We always create a nonempty .got so that _GLOBAL_OFFSET_TABLE_
+    // has something to point to. Each target may reserve a couple of
+    // entries at the beginning of the section.
+    if constexpr (std::is_same_v<E, PPC32>)
+      this->shdr.sh_size = sizeof(Word<E>) * 3;
+    else if constexpr (std::is_same_v<E, S390X>)
+      this->shdr.sh_size = sizeof(Word<E>) * 2;
+    else
+      this->shdr.sh_size = sizeof(Word<E>);
   }
 
   void add_got_symbol(Context<E> &ctx, Symbol<E> *sym);
@@ -1800,6 +1805,7 @@ struct Context {
   Symbol<E> *_DYNAMIC = nullptr;
   Symbol<E> *_GLOBAL_OFFSET_TABLE_ = nullptr;
   Symbol<E> *_PROCEDURE_LINKAGE_TABLE_ = nullptr;
+  Symbol<E> *_SDA_BASE_ = nullptr;
   Symbol<E> *_TLS_MODULE_BASE_ = nullptr;
   Symbol<E> *__GNU_EH_FRAME_HDR = nullptr;
   Symbol<E> *__bss_start = nullptr;
