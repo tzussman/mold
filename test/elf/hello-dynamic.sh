@@ -1,7 +1,7 @@
 #!/bin/bash
 . $(dirname $0)/common.inc
 
-cat <<EOF | $CC -o $t/a.o -c -xc - -fno-PIE
+cat <<EOF | $CC -o $t/a.o -c -xc - -fPIC
 #include <stdio.h>
 int main() {
   printf("Hello world\n");

@@ -2926,12 +2926,12 @@ struct PPC32 {
   static constexpr bool is_le = false;
   static constexpr u32 page_size = 65536;
   static constexpr u32 e_machine = EM_PPC;
-  static constexpr u32 plt_hdr_size = 56;
+  static constexpr u32 plt_hdr_size = 20;
   static constexpr u32 plt_size = 4;
   static constexpr u32 pltgot_size = 16;
   static constexpr u32 tls_dtp_offset = 0x8000;
   static constexpr u32 thunk_hdr_size = 0;
-  static constexpr u32 thunk_size = 32;
+  static constexpr u32 thunk_size = 20;
 };
 
 template <> struct ElfSym<PPC32>     : EB32Sym {};

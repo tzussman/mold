@@ -17,27 +17,15 @@ static u64 highesta(u64 x) { return (x + 0x8000) >> 48; }
 template <>
 void write_plt_header(Context<E> &ctx, u8 *buf) {
   static const ub32 insn[] = {
-    0x7c08'02a6, // mflr    r0
-    0x429f'0005, // bcl     20, 31, 4 // obtain PC
-    0x7d88'02a6, // mflr    r12
-    0x7c08'03a6, // mtlr    r0
-
-    0x3d6b'0000, // addis   r11, r11, _GLOBAL_OFFSET_TABLE_@ha
-    0x396b'001c, // addi    r11, r11, _GLOBAL_OFFSET_TABLE_@lo
-    0x7d6c'5850, // subf    r11, r12, r11
-    0x3d8c'0002, // addis   r12, r12, 2
-    0x800c'f7f0, // lwz     r0,  -2064(r12)
-    0x818c'f7f4, // lwz     r12, -2060(r12)
-    0x7c09'03a6, // mtctr   r0
-    // Triple r11
-    0x7c0b'5a14, // add     r0,  r11, r11
-    0x7d60'5a14, // add     r11, r0,  r11
+    0x1d6b'000c, // mulli   %r11, %r11, 12
+    0x819e'0008, // lwz     %r12, 8(%r30)
+    0x801e'0004, // lwz     %r0,  4(%r30)
+    0x7c09'03a6, // mtctr   %r0
     0x4e80'0420, // bctr
   };
 
   static_assert(sizeof(insn) == E::plt_hdr_size);
   memcpy(buf, insn, sizeof(insn));
-  *(ub64 *)(buf + 44) = ctx.gotplt->shdr.sh_addr - ctx.plt->shdr.sh_addr - 8;
 }
 
 template <>
@@ -102,8 +90,8 @@ void InputSection<E>::apply_reloc_alloc(Context<E> &ctx, u8 *base) {
       apply_dyn_absrel(ctx, sym, rel, loc, S, A, P, dynrel);
       break;
     case R_PPC_ADDR14:
-      *(ub32 *)loc &= 0b1100'0000'0000'0000'1111'1111'1111'1111;
-      *(ub32 *)loc |= bits(S + A, 15, 2) << 16;
+      *(ub32 *)loc &= 0b1111'1111'1111'1111'0000'0000'0000'0011;
+      *(ub32 *)loc |= bits(S + A, 15, 2) << 2;
       break;
     case R_PPC_ADDR16:
     case R_PPC_UADDR16:
@@ -120,19 +108,19 @@ void InputSection<E>::apply_reloc_alloc(Context<E> &ctx, u8 *base) {
       *(ub16 *)loc |= ha(S + A);
       break;
     case R_PPC_ADDR24:
-      *(ub32 *)loc &= 0b1100'0000'0000'0000'0000'0000'0011'1111;
-      *(ub32 *)loc |= bits(S + A, 25, 2) << 6;
+      *(ub32 *)loc &= 0b1111'1100'0000'0000'0000'0000'0000'0011;
+      *(ub32 *)loc |= bits(S + A, 25, 2) << 2;
       break;
     case R_PPC_ADDR30:
-      *(ub32 *)loc &= 0b1100'0000'0000'0000'0000'0000'0000'0000;
-      *(ub32 *)loc |= bits(S + A, 31, 2);
+      *(ub32 *)loc &= 0b0000'0000'0000'0000'0000'0000'0000'0011;
+      *(ub32 *)loc |= bits(S + A, 31, 2) << 2;
       break;
     case R_PPC_PLT32:
       *(ub32 *)loc |= S + A;
       break;
     case R_PPC_REL14:
-      *(ub32 *)loc &= 0b1100'0000'0000'0000'1111'1111'1111'1111;
-      *(ub32 *)loc |= bits(S + A - P, 15, 2) << 16;
+      *(ub32 *)loc &= 0b1111'1111'1111'1111'0000'0000'0000'0011;
+      *(ub32 *)loc |= bits(S + A - P, 15, 2) << 2;
       break;
     case R_PPC_REL16:
     case R_PPC_REL16_LO:
@@ -145,8 +133,8 @@ void InputSection<E>::apply_reloc_alloc(Context<E> &ctx, u8 *base) {
       *(ub16 *)loc = ha(S + A - P);
       break;
     case R_PPC_REL24:
-      *(ub32 *)loc &= 0b1100'0000'0000'0000'0000'0000'0011'1111;
-      *(ub32 *)loc |= bits(S + A - P, 25, 2) << 6;
+      *(ub32 *)loc &= 0b1111'1100'0000'0000'0000'0000'0000'0011;
+      *(ub32 *)loc |= bits(S + A - P, 25, 2) << 2;
       break;
     case R_PPC_PLTREL24: {
       i64 val = S - P;
@@ -157,8 +145,8 @@ void InputSection<E>::apply_reloc_alloc(Context<E> &ctx, u8 *base) {
         val = output_section->thunks[ref.thunk_idx]->get_addr(ref.sym_idx) - P;
       }
 
-      *(ub32 *)loc &= 0b1100'0000'0000'0000'0000'0000'0011'1111;
-      *(ub32 *)loc |= bits(val, 25, 2) << 6;
+      *(ub32 *)loc &= 0b1111'1100'0000'0000'0000'0000'0000'0011;
+      *(ub32 *)loc |= bits(val, 25, 2) << 2;
       break;
     }
     case R_PPC_REL32:
@@ -305,31 +293,42 @@ void RangeExtensionThunk<E>::copy_buf(Context<E> &ctx) {
   u8 *buf = ctx.buf + output_section.shdr.sh_offset + offset;
 
   static const ub32 plt_thunk[] = {
-    // Get the address of this thunk
-    0x7c08'02a6, // mflr    %r0
-    0x429f'0005, // bcl     20, 31, 4
-    0x7d68'02a6, // mflr    %r11
-    0x7c08'03a6, // mtlr    %r0
-
-    // Load an address from .got/.got.plt and jump there
-    0x3d6b'0000, // addis   %r11, (GOTPLT_ENTRY - THUNK_ADDR)@ha
-    0x816b'0000, // lwz     %r11, (GOTPLT_ENTRY - THUNK_ADDR)@l(%r11)
+    // Load an address from .got.plt and jump there.
+    // We assume that r30 has the address of .got.
+    0x3d7e'0000, // addis   %r11, %r30, OFFSET@ha
+    0x816b'0000, // lwz     %r11, OFFSET@l(%r11)
     0x7d69'03a6, // mtctr   %r11
+    0x3960'0000, // li      %r11, PLT_INDEX
     0x4e80'0420, // bctr
   };
 
+  static const ub32 pltgot_thunk[] = {
+    0x3d7e'0000, // addis   %r11, %r30, OFFSET@ha
+    0x816b'0000, // lwz     %r11, OFFSET@l(%r11)
+    0x7d69'03a6, // mtctr   %r11
+    0x4e80'0420, // bctr
+    0x6000'0000, // nop
+  };
+
   static_assert(E::thunk_size == sizeof(plt_thunk));
+  static_assert(E::thunk_size == sizeof(pltgot_thunk));
 
   for (i64 i = 0; i < symbols.size(); i++) {
     Symbol<E> &sym = *symbols[i];
 
-    u64 got = sym.has_got(ctx) ? sym.get_got_addr(ctx) : sym.get_gotplt_addr(ctx);
-    u64 thunk = get_addr(i);
-
     ub32 *loc = (ub32 *)(buf + i * E::thunk_size);
     memcpy(loc, plt_thunk, sizeof(plt_thunk));
-    loc[4] |= higha(got - thunk);
-    loc[5] |= lo(got - thunk);
+
+    if (sym.has_got(ctx)) {
+      i64 off = sym.get_got_addr(ctx) - ctx.got->shdr.sh_addr;
+      loc[0] |= higha(off);
+      loc[1] |= lo(off);
+    } else {
+      i64 off = sym.get_gotplt_addr(ctx) - ctx.got->shdr.sh_addr;
+      loc[0] |= higha(off);
+      loc[1] |= lo(off);
+      loc[3] |= sym.get_plt_idx(ctx);
+    }
   }
 }
 

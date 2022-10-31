@@ -2001,6 +2001,11 @@ void fix_synthetic_symbols(Context<E> &ctx) {
   else
     start(ctx._GLOBAL_OFFSET_TABLE_, ctx.got);
 
+  // // On PPC32, _GLOBAL_OFFSET_TABLE_ is 0x8000 past the beginning of .got
+  // // to maximize the addressable range with a signed 16-bit offset.
+  //  if constexpr (std::is_same_v<E, PPC32>)
+  //    ctx._GLOBAL_OFFSET_TABLE_ += 0x8000;
+
   // _PROCEDURE_LINKAGE_TABLE_. We need this on SPARC.
   start(ctx._PROCEDURE_LINKAGE_TABLE_, ctx.plt);
 

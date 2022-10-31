@@ -1468,7 +1468,7 @@ void GotPltSection<E>::copy_buf(Context<E> &ctx) {
   // On PPC64, it's dynamic loader responsibility to fill the .got.plt
   // section. Dynamic loader finds the address of the first PLT entry by
   // DT_PPC64_GLINK and assumes that each PLT entry is 4 bytes long.
-  if constexpr (!is_ppc<E>) {
+  if constexpr (!is_ppc64<E>) {
     Word<E> *buf = (Word<E> *)(ctx.buf + this->shdr.sh_offset);
     memset(buf, 0, this->shdr.sh_size);
 

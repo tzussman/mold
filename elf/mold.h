@@ -573,7 +573,7 @@ class GotPltSection : public Chunk<E> {
 public:
   GotPltSection() {
     this->name = ".got.plt";
-    this->shdr.sh_type = is_ppc<E> ? SHT_NOBITS : SHT_PROGBITS;
+    this->shdr.sh_type = is_ppc64<E> ? SHT_NOBITS : SHT_PROGBITS;
     this->shdr.sh_flags = SHF_ALLOC | SHF_WRITE;
     this->shdr.sh_addralign = sizeof(Word<E>);
     this->shdr.sh_size = HDR_SIZE;
