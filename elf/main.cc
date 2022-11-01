@@ -407,6 +407,122 @@ static int redo_main(int argc, char **argv, MachineType ty) {
 }
 
 template <typename E>
+void tarjan(Context<E> &ctx) {
+  Timer t(ctx, "tarjan");
+
+  i64 idx = 0;
+  std::vector<InputSection<E> *> stack;
+  std::vector<InputSection<E> *> sccs;
+
+  static Counter size1("sccs_size_1");
+  static Counter size5("sccs_size_5");
+  static Counter size10("sccs_size_10");
+  static Counter size50("sccs_size_50");
+  static Counter size100("sccs_size_100");
+  static Counter size1000("sccs_size_1000");
+
+  std::function<i64(InputSection<E> &v)> strong_connect;
+
+  strong_connect = [&](InputSection<E> &v) {
+    v.scc_idx = idx;
+    v.scc_lowlink = idx;
+    v.scc_onstack = true;
+    idx++;
+    stack.push_back(&v);
+
+    i64 depth = 0;
+
+    auto visit = [&](const ElfRel<E> &rel) {
+      Symbol<E> *sym = v.file.symbols[rel.r_sym];
+      InputSection<E> *w = sym->get_input_section();
+
+      if (w && w->is_alive && (w->shdr().sh_flags & SHF_ALLOC)) {
+        if (w->scc_idx == -1) {
+          depth = std::max(depth, strong_connect(*w));
+          v.scc_lowlink = std::min(v.scc_lowlink, w->scc_lowlink);
+        } else if (w->scc_onstack) {
+          v.scc_lowlink = std::min(v.scc_lowlink, w->scc_idx);
+        } else {
+          depth = std::max<i64>(depth, w->scc_depth);
+        }
+      }
+    };
+
+    // Consider successors of v
+    for (const ElfRel<E> &r : v.get_rels(ctx))
+      visit(r);
+
+    for (FdeRecord<E> &fde : v.get_fdes())
+      for (const ElfRel<E> &r : fde.get_rels(v.file).subspan(1))
+        visit(r);
+
+    // If v is a root node, pop the stack and generate an SCC
+    if (v.scc_lowlink == v.scc_idx) {
+      sccs.push_back(&v);
+
+      i64 size = 0;
+      InputSection<E> *w;
+      do {
+        w = stack.back();
+        stack.pop_back();
+        w->scc_onstack = false;
+        w->scc_depth = depth;
+        size++;
+      } while (&v != w);
+
+      if (size == 1)
+        size1++;
+      else if (size < 5)
+        size5++;
+      else if (size < 10)
+        size10++;
+      else if (size < 50)
+        size50++;
+      else if (size < 100)
+        size100++;
+      else if (size < 1000)
+        size1000++;
+      return depth + 1;
+    }
+
+    return depth;
+  };
+
+  for (ObjectFile<E> *file : ctx.objs)
+    for (std::unique_ptr<InputSection<E>> &isec : file->sections)
+      if (isec && isec->is_alive && (isec->shdr().sh_flags & SHF_ALLOC) &&
+          isec->scc_idx == -1)
+        strong_connect(*isec);
+
+  assert(stack.empty());
+
+  static Counter depth1("sccs_depth_1");
+  static Counter depth5("sccs_depth_5");
+  static Counter depth10("sccs_depth_10");
+  static Counter depth50("sccs_depth_50");
+  static Counter depth100("sccs_depth_100");
+  static Counter depth1000("sccs_depth_1000");
+
+  for (InputSection<E> *isec : sccs) {
+    if (isec->scc_depth == 1)
+      depth1++;
+    else if (isec->scc_depth < 5)
+      depth5++;
+    else if (isec->scc_depth < 10)
+      depth10++;
+    else if (isec->scc_depth < 50)
+      depth50++;
+    else if (isec->scc_depth < 100)
+      depth100++;
+    else if (isec->scc_depth < 1000)
+      depth1000++;
+  }
+
+  static Counter counter("sccs");
+  counter += sccs.size();
+}
+
+template <typename E>
 int elf_main(int argc, char **argv) {
   Context<E> ctx;
 
@@ -520,6 +636,8 @@ int elf_main(int argc, char **argv) {
   // Garbage-collect unreachable sections.
   if (ctx.arg.gc_sections)
     gc_sections(ctx);
+
+  tarjan(ctx);
 
   // Merge identical read-only sections.
   if (ctx.arg.icf)

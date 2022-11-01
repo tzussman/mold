@@ -340,6 +340,12 @@ public:
   bool icf_eligible = false;
   bool icf_leaf = false;
 
+  // Tarjan's strongly connected components algorithm
+  u32 scc_idx = -1;
+  u32 scc_lowlink = -1;
+  u32 scc_depth = -1;
+  bool scc_onstack;
+
 private:
   void scan_rel(Context<E> &ctx, Symbol<E> &sym, const ElfRel<E> &rel,
                 const ScanAction table[3][4]);
